@@ -38,6 +38,14 @@ const pluginsWithFiltersPerLanguage = {};
 const args = process.argv.slice(2);
 let ONLY_NEW = args.includes('--only-new');
 
+// Fork-only: comma separated plugin ids to publish (e.g. ONLY_PLUGINS=helioscans).
+// The app dedupes plugins by id across repositories and the last repository
+// wins, so republishing every upstream plugin from this fork would shadow the
+// official, more up to date copies.
+const ONLY_PLUGINS = process.env.ONLY_PLUGINS
+  ? process.env.ONLY_PLUGINS.split(',').map(id => id.trim())
+  : undefined;
+
 let existingPlugins = {};
 if (!fs.existsSync(jsonPath)) ONLY_NEW = false;
 if (ONLY_NEW) {
@@ -118,6 +126,8 @@ for (let language in languages) {
     const { id, name, site, version, icon, customJS, customCSS, filters } =
       instance;
     const normalisedName = name.replace(/\[.*\]/, '');
+
+    if (ONLY_PLUGINS && !ONLY_PLUGINS.includes(id)) return;
 
     // --only-new logic
     if (
