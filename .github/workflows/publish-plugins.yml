@@ -9,6 +9,8 @@ on:
       - 'public/**'
       - 'scripts/publish-plugins.sh'
       - '.github/workflows/publish-plugins.yml'
+  # Fork: allow a manual run (gh workflow run publish-plugins.yml)
+  workflow_dispatch:
 
 # Fork: write access so the built-in GITHUB_TOKEN can push the plugins branch
 # (upstream uses a REPO_SCOPED_TOKEN secret instead).

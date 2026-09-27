@@ -210,7 +210,7 @@ class HelioScansPlugin implements Plugin.PluginBase {
     const $ = await this.getCheerio(this.site + chapterPath);
     const content = $('#pages .novel-reader');
     if (!content.length) {
-      if ($('body').text().includes('early access chapter')) {
+      if ($('body').text().toLowerCase().includes('early access chapter')) {
         throw new Error('This is a paid early access chapter.');
       }
       throw new Error('Chapter content not found, try to open in webview.');
