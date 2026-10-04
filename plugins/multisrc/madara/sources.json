@@ -316,7 +316,8 @@
     "sourceName": "Azora",
     "options": {
       "useNewChapterEndpoint": true,
-      "lang": "Arabic"
+      "lang": "Arabic",
+      "down": true
     }
   },
   {
@@ -407,13 +408,12 @@
   },
   {
     "id": "bellereservoir",
-    "sourceSite": "https://bellereservoir.com/",
-    "sourceName": "Belle Reservoir",
+    "sourceSite": "https://bellerepository.com/",
+    "sourceName": "Belle Repository",
     "options": {
       "useNewChapterEndpoint": true,
       "lang": "English",
-      "down": true,
-      "downSince": 1777153113000
+      "versionIncrements": 1
     }
   },
   {
@@ -581,15 +581,6 @@
     }
   },
   {
-    "id": "dragonholic",
-    "sourceSite": "https://dragonholic.com/",
-    "sourceName": "Dragonholic",
-    "options": {
-      "lang": "English",
-      "useNewChapterEndpoint": true
-    }
-  },
-  {
     "id": "etudetranslations",
     "sourceSite": "https://etudetranslations.com/",
     "sourceName": "Etude Translations",
@@ -661,13 +652,14 @@
       "useNewChapterEndpoint": true
     }
   },
-
   {
     "id": "lovelyblossoms",
     "sourceSite": "https://lovelyblossoms.com/",
     "sourceName": "Lovelyblossoms",
     "options": {
-      "useNewChapterEndpoint": true
+      "useNewChapterEndpoint": true,
+      "browserHeaders": true,
+      "versionIncrements": 1
     }
   },
   {

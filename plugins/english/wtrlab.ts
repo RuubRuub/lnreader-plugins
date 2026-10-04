@@ -9,7 +9,7 @@ class WTRLAB implements Plugin.PluginBase {
   id = 'WTRLAB';
   name = 'WTR-LAB';
   site = 'https://wtr-lab.com/';
-  version = '1.2.1';
+  version = '1.2.3';
   icon = 'src/en/wtrlab/icon.png';
   sourceLang = 'en/';
   baggage = '';
@@ -60,6 +60,52 @@ class WTRLAB implements Plugin.PluginBase {
   /** Full Cookie header value supplied by the user in plugin settings. */
   get sessionCookie(): string {
     return (storage.get<string>('sessionCookie') || '').trim();
+  }
+
+  /**
+   * Resolve the chapter payload.
+   *
+   * The reader API used to carry the body inline at data.data. It now returns
+   * an envelope with a `content_url` pointing at the real payload, whose inner
+   * shape (body / glossary_data / model) is unchanged. Handle both so the
+   * plugin works whichever the server returns.
+   */
+  async resolveChapterContent(
+    parsed: ReaderResponse,
+    cookie: string,
+  ): Promise<ChapterContent | null> {
+    const inline = parsed?.data?.data;
+    if (inline && inline.body !== undefined) return inline;
+
+    const contentUrl = parsed?.content_url;
+    if (!contentUrl) return null;
+
+    const url = /^https?:\/\//i.test(contentUrl)
+      ? contentUrl
+      : this.site.replace(/\/$/, '') + contentUrl;
+
+    // Only ever send the session cookie to the source's own hosts. The server
+    // controls content_url, and an absolute one could point anywhere.
+    const hostOf = (value: string) =>
+      (value.match(/^https?:\/\/([^/?#]+)/i)?.[1] || '').toLowerCase();
+    const siteHost = hostOf(this.site);
+    const targetHost = hostOf(url);
+    const sameSite =
+      !!siteHost &&
+      (targetHost === siteHost || targetHost.endsWith('.' + siteHost));
+
+    const res = await fetchApi(url, {
+      headers: {
+        'Accept': 'application/json',
+        ...(cookie && sameSite ? { Cookie: cookie } : {}),
+      },
+    });
+    const text = await res.text();
+    try {
+      return JSON.parse(text)?.data?.data ?? null;
+    } catch (e) {
+      return null;
+    }
   }
 
   /** Only attempt the sign-in link once per app run: the links are single-use. */
@@ -682,6 +728,7 @@ class WTRLAB implements Plugin.PluginBase {
 
     const attemptLog: string[] = [];
     let parsedJson;
+    let content: ChapterContent | null = null;
     let usedType: string | null = null;
 
     // Establish a session from the emailed link before asking for a chapter.
@@ -748,6 +795,18 @@ class WTRLAB implements Plugin.PluginBase {
         continue;
       }
 
+      // Resolve the body here, not after the loop: a healthy envelope does
+      // not guarantee a payload, and if this mode has none the next one
+      // (typically Web) should still get its turn.
+      const resolved = await this.resolveChapterContent(candidate, cookie);
+      if (!resolved || resolved.body === undefined) {
+        attemptLog.push(
+          `"${type}": request succeeded but no chapter content was returned`,
+        );
+        continue;
+      }
+
+      content = resolved;
       usedType = type;
       break;
     }
@@ -759,19 +818,23 @@ class WTRLAB implements Plugin.PluginBase {
         ? `session cookie sent (${cookie.length} chars)`
         : 'no session cookie set';
 
-    if (!usedType || !parsedJson?.data?.data) {
+    if (!usedType || !content || content.body === undefined) {
       const errorMsg =
         `None of the requested translations could be loaded [${cookieState}]. ` +
         (attemptLog.length
           ? attemptLog.join(' | ')
-          : 'The server returned no usable response.');
+          : usedType
+            ? 'The server accepted the request but returned no chapter content.'
+            : 'The server returned no usable response.');
       console.error(errorMsg);
       throw new Error(errorMsg);
     }
-    let chapterContent: any = parsedJson.data.data.body;
-    const chapterTitle: string | undefined = parsedJson?.chapter?.title;
+
+    let chapterContent: any = content.body;
+    const chapterTitle: string | undefined =
+      parsedJson?.chapter?.title || content.title;
     const chapterGlossary: ChapterContent['glossary_data'] | undefined =
-      parsedJson?.data?.data?.glossary_data;
+      content.glossary_data;
 
     let htmlString = '';
     if (chapterTitle) {
@@ -888,8 +951,14 @@ class WTRLAB implements Plugin.PluginBase {
     searchTerm: string,
     page: number,
   ): Promise<Plugin.NovelItem[]> {
-    const filters = this.filters;
-    filters.search.value = searchTerm;
+    // Copy rather than mutate: this.filters is the plugin's own filter
+    // definition object, which the app also reads. Writing the term into it
+    // leaves it there, so every later browse is narrowed to that search and
+    // Reset restores the polluted value.
+    const filters = {
+      ...this.filters,
+      search: { ...this.filters.search, value: searchTerm },
+    };
     return this.popularNovels(page, { showLatestNovels: false, filters });
   }
 
@@ -989,46 +1058,46 @@ class WTRLAB implements Plugin.PluginBase {
       type: FilterTypes.ExcludableCheckboxGroup,
       value: { include: [], exclude: [] },
       options: [
-        { label: 'Action', value: 'action' },
-        { label: 'Adult', value: 'adult' },
-        { label: 'Adventure', value: 'adventure' },
-        { label: 'Comedy', value: 'comedy' },
-        { label: 'Drama', value: 'drama' },
-        { label: 'Ecchi', value: 'ecchi' },
-        { label: 'Erciyuan', value: 'erciyuan' },
-        { label: 'Fan-Fiction', value: 'fan-fiction' },
-        { label: 'Fantasy', value: 'fantasy' },
-        { label: 'Game', value: 'game' },
-        { label: 'Gender-Bender', value: 'gender-bender' },
-        { label: 'Harem', value: 'harem' },
-        { label: 'Historical', value: 'historical' },
-        { label: 'Horror', value: 'horror' },
-        { label: 'Josei', value: 'josei' },
-        { label: 'Martial-Arts', value: 'martial-arts' },
-        { label: 'Mature', value: 'mature' },
-        { label: 'Mecha', value: 'mecha' },
-        { label: 'Military', value: 'military' },
-        { label: 'Mystery', value: 'mystery' },
-        { label: 'Psychological', value: 'psychological' },
-        { label: 'Romance', value: 'romance' },
-        { label: 'School-Life', value: 'school-life' },
-        { label: 'Sci-Fi', value: 'sci-fi' },
-        { label: 'Seinen', value: 'seinen' },
-        { label: 'Shoujo', value: 'shoujo' },
-        { label: 'Shoujo-Ai', value: 'shoujo-ai' },
-        { label: 'Shounen', value: 'shounen' },
-        { label: 'Shounen-Ai', value: 'shounen-ai' },
-        { label: 'Slice-Of-Life', value: 'slice-of-life' },
-        { label: 'Smut', value: 'smut' },
-        { label: 'Sports', value: 'sports' },
-        { label: 'Supernatural', value: 'supernatural' },
-        { label: 'Tragedy', value: 'tragedy' },
-        { label: 'Urban-Life', value: 'urban-life' },
-        { label: 'Wuxia', value: 'wuxia' },
-        { label: 'Xianxia', value: 'xianxia' },
-        { label: 'Xuanhuan', value: 'xuanhuan' },
-        { label: 'Yaoi', value: 'yaoi' },
-        { label: 'Yuri', value: 'yuri' },
+        { label: 'Action', value: '1' },
+        { label: 'Adult', value: '2' },
+        { label: 'Adventure', value: '3' },
+        { label: 'Comedy', value: '4' },
+        { label: 'Drama', value: '5' },
+        { label: 'Ecchi', value: '6' },
+        { label: 'Erciyuan', value: '7' },
+        { label: 'Fan-Fiction', value: '8' },
+        { label: 'Fantasy', value: '9' },
+        { label: 'Game', value: '10' },
+        { label: 'Gender-Bender', value: '11' },
+        { label: 'Harem', value: '12' },
+        { label: 'Historical', value: '13' },
+        { label: 'Horror', value: '14' },
+        { label: 'Josei', value: '15' },
+        { label: 'Martial-Arts', value: '16' },
+        { label: 'Mature', value: '17' },
+        { label: 'Mecha', value: '18' },
+        { label: 'Military', value: '19' },
+        { label: 'Mystery', value: '20' },
+        { label: 'Psychological', value: '21' },
+        { label: 'Romance', value: '22' },
+        { label: 'School-Life', value: '23' },
+        { label: 'Sci-Fi', value: '24' },
+        { label: 'Seinen', value: '25' },
+        { label: 'Shoujo', value: '26' },
+        { label: 'Shoujo-Ai', value: '27' },
+        { label: 'Shounen', value: '28' },
+        { label: 'Shounen-Ai', value: '29' },
+        { label: 'Slice-Of-Life', value: '30' },
+        { label: 'Smut', value: '31' },
+        { label: 'Sports', value: '32' },
+        { label: 'Supernatural', value: '33' },
+        { label: 'Tragedy', value: '34' },
+        { label: 'Urban-Life', value: '35' },
+        { label: 'Wuxia', value: '36' },
+        { label: 'Xianxia', value: '37' },
+        { label: 'Xuanhuan', value: '38' },
+        { label: 'Yaoi', value: '39' },
+        { label: 'Yuri', value: '40' },
       ],
     },
     tag_operator: {
@@ -1967,6 +2036,13 @@ type ApiChapter = {
 type ChapterData = {
   data: ChapterContent;
 };
+type ReaderResponse = {
+  success?: boolean;
+  content_url?: string;
+  chapter?: { title?: string; locked?: boolean };
+  data?: { data?: ChapterContent };
+};
+
 type ChapterContent = {
   title: string;
   body: string;
