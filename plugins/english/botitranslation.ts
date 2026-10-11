@@ -22,14 +22,21 @@ type Chapter = {
   title: string;
   chapterOrder: number;
   publishTime: number;
+  paywallStatus: string;
+  tier: number;
 };
+
+// Coin chapters are marked 'charge', advance chapters carry a subscription
+// tier. Both only return a short preview without buying them.
+const isLocked = (chap: Chapter) =>
+  chap.paywallStatus === 'charge' || chap.tier > 0;
 
 class BotiTranslation implements Plugin.PluginBase {
   id = 'botitranslation';
   name = 'Boti Translation';
   icon = 'src/en/botitranslation/icon.png';
   site = 'https://www.botitranslation.com';
-  version = '1.0.0';
+  version = '1.0.1';
 
   headers = {
     'lang': 'en_US',
@@ -76,6 +83,7 @@ class BotiTranslation implements Plugin.PluginBase {
       );
       const list: Chapter[] = data.list || [];
       for (const chap of list) {
+        if (isLocked(chap)) continue;
         chapters.push({
           name: chap.title,
           path: chap.id.toString(),
@@ -102,6 +110,9 @@ class BotiTranslation implements Plugin.PluginBase {
 
   async parseChapter(chapterPath: string): Promise<string> {
     const chapter = await this.api('/chapters/' + chapterPath);
+    if (isLocked(chapter)) {
+      throw new Error('This is a paid chapter.');
+    }
     return chapter.content || '';
   }
 
