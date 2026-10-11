@@ -55,4 +55,4 @@ jobs:
         shell: bash
         env:
           # Only publish this fork's own plugins; see scripts/build-plugin-manifest.js
-          ONLY_PLUGINS: helioscans,botitranslation
+          ONLY_PLUGINS: helioscans,botitranslation,mangotranslations
